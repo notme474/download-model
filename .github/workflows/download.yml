@@ -36,45 +36,38 @@ jobs:
               time.sleep(5)
               
               print('寻找主下载按钮...')
-              # 使用更精准的定位方式，避免点错
               main_btn = page.locator('a.button.download_btn, a:has-text(\"Download\")').first
-              if main_btn.count() == 0:
-                  print('❌ 找不到主下载按钮')
-                  exit(1)
               main_btn.click()
               time.sleep(5)
               
               print('检查是否有赞助弹窗...')
               no_thanks = page.locator('a:has-text(\"No thanks\"), a:has-text(\"直接下载\"), a:has-text(\"Just take me\")')
               if no_thanks.count() > 0:
-                  print('✅ 发现弹窗，点击 No thanks...')
                   no_thanks.first.click()
                   time.sleep(5)
-              else:
-                  print('没有发现弹窗，可能页面结构不同，继续尝试...')
               
               print('等待最终下载页面加载...')
               page.wait_for_timeout(8000) 
               
-              print('寻找最终文件链接...')
-              # 查找真正的下载链接 (a标签里带有 /download/ 的链接)
-              final_link = page.locator('a[href*=\"/download/\"]').last
+              print('寻找最终的 Download 按钮...')
+              # 终极修改：直接找页面上名字叫 Download 的按钮或链接，不管是 a 还是 button
+              final_btn = page.locator('a:has-text(\"Download\"), button:has-text(\"Download\"), .download_btn').last
               
-              if final_link.count() == 0:
-                  print('❌ 找不到最终下载链接，尝试截图记录当前页面...')
+              if final_btn.count() == 0:
+                  print('❌ 依然找不到按钮，截图记录！')
                   page.screenshot(path='error_screenshot.png')
                   exit(1)
                   
-              print('触发下载动作！(如果卡住，说明正在下载中，最多等3分钟)')
+              print('触发下载动作！(最多等3分钟)')
               try:
-                  with page.expect_download(timeout=180000) as download_info: # 增加到3分钟
-                      final_link.click()
+                  with page.expect_download(timeout=180000) as download_info:
+                      final_btn.click()
                   download = download_info.value
                   download.save_as('Downtown_City_MegaKit.zip')
                   print('✅ 文件下载成功！')
               except Exception as e:
-                  print(f'❌ 下载失败或超时: {e}')
-                  page.screenshot(path='error_screenshot.png') # 截图保存现场
+                  print(f'❌ 下载失败: {e}')
+                  page.screenshot(path='error_screenshot.png')
                   exit(1)
               
               browser.close()
