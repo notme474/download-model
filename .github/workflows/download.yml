@@ -17,31 +17,33 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install cloudscraper beautifulsoup4
 
       - name: Download the model pack
         run: |
           python -c "
-          import requests
+          import cloudscraper
           from bs4 import BeautifulSoup
-
+          import sys
+          
           url = 'https://quaternius.itch.io/downtown-city-megakit'
-          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-          resp = requests.get(url, headers=headers)
+          scraper = cloudscraper.create_scraper()
+          resp = scraper.get(url)
           soup = BeautifulSoup(resp.text, 'html.parser')
-
+          
           download_link = None
           for a in soup.find_all('a', href=True):
               if '/download/' in a['href']:
                   download_link = a['href']
                   break
-
+          
           if not download_link:
-              print('❌ 找不到下载直链，可能是页面结构变了')
+              print('❌ 找不到下载直链，页面内容前500字如下：')
+              print(resp.text[:500])
               exit(1)
-
+          
           print(f'✅ 找到下载直链: {download_link}')
-          r = requests.get(download_link, stream=True, headers=headers)
+          r = scraper.get(download_link, stream=True)
           with open('Downtown_City_MegaKit.zip', 'wb') as f:
               for chunk in r.iter_content(chunk_size=8192):
                   f.write(chunk)
