@@ -1,9 +1,9 @@
-name: Download Quaternius MegaKit
+name: Fetch Quaternius MegaKit URL
 on:
   workflow_dispatch:
 
 jobs:
-  download:
+  fetch_url:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,67 +20,83 @@ jobs:
           pip install playwright
           playwright install chromium
 
-      - name: Download with Playwright
+      - name: Fetch Download URL (With Alternate Mode)
         run: |
           python -c "
-          from playwright.sync_api import sync_playwright
           import time
+          from playwright.sync_api import sync_playwright
+
+          captured_urls = []
+
+          def handle_request(request):
+              if 'itch.zone' in request.url or 'amazonaws' in request.url:
+                  captured_urls.append(request.url)
+                  print(f'🎯 抓取到真实下载地址: {request.url}')
 
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
               context = browser.new_context(accept_downloads=True)
               page = context.new_page()
-              
+              page.on('request', handle_request)
+
               print('正在访问 itch.io...')
               page.goto('https://quaternius.itch.io/downtown-city-megakit', timeout=90000)
               time.sleep(5)
-              
+
               print('寻找主下载按钮...')
-              main_btn = page.locator('a.button.download_btn, a:has-text(\"Download\")').first
-              main_btn.click()
+              page.locator('a.button.download_btn, a:has-text(\"Download\")').first.click()
               time.sleep(5)
-              
-              print('检查是否有赞助弹窗...')
+
+              print('检查并点击 No thanks 弹窗...')
               no_thanks = page.locator('a:has-text(\"No thanks\"), a:has-text(\"直接下载\"), a:has-text(\"Just take me\")')
               if no_thanks.count() > 0:
                   no_thanks.first.click()
                   time.sleep(5)
-              
+
               print('等待最终下载页面加载...')
-              page.wait_for_timeout(8000) 
-              
-              print('寻找最终的 Download 按钮...')
-              # 终极修改：直接找页面上名字叫 Download 的按钮或链接，不管是 a 还是 button
-              final_btn = page.locator('a:has-text(\"Download\"), button:has-text(\"Download\"), .download_btn').last
-              
-              if final_btn.count() == 0:
-                  print('❌ 依然找不到按钮，截图记录！')
+              page.wait_for_timeout(5000)
+
+              print('🔥 检查是否出现了备用下载模式弹窗...')
+              alt_checkbox = page.locator('input[type=\"checkbox\"]')
+              if alt_checkbox.count() > 0 and page.locator('text=\"Enable alternate download mode\"').count() > 0:
+                  print('✅ 发现备用下载模式弹窗，正在勾选...')
+                  alt_checkbox.check()
+                  time.sleep(2)
+                  page.locator('text=\"Close\"').click()
+                  time.sleep(3)
+                  print('✅ 已启用备用模式并关闭弹窗！')
+              else:
+                  print('没有发现备用模式弹窗，继续尝试...')
+
+              print('再次寻找最终的 Download 按钮并点击...')
+              final_btn = page.locator('a:has-text(\"Download\"), button:has-text(\"Download\")').last
+              if final_btn.count() > 0:
+                  final_btn.click()
+              else:
+                  print('❌ 找不到最终按钮')
+
+              print('等待网络请求捕获...')
+              time.sleep(15)
+
+              if captured_urls:
+                  print('✅ 成功捕获 URL！')
+                  with open('url.txt', 'w') as f:
+                      f.write(captured_urls[-1])
+              else:
+                  print('❌ 未捕获到下载 URL。')
                   page.screenshot(path='error_screenshot.png')
-                  exit(1)
-                  
-              print('触发下载动作！(最多等3分钟)')
-              try:
-                  with page.expect_download(timeout=180000) as download_info:
-                      final_btn.click()
-                  download = download_info.value
-                  download.save_as('Downtown_City_MegaKit.zip')
-                  print('✅ 文件下载成功！')
-              except Exception as e:
-                  print(f'❌ 下载失败: {e}')
-                  page.screenshot(path='error_screenshot.png')
-                  exit(1)
-              
+
               browser.close()
           "
 
-      - name: Upload the model pack
+      - name: Upload URL Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Downtown-City-MegaKit
-          path: Downtown_City_MegaKit.zip
-          
+          name: download-url
+          path: url.txt
+
       - name: Upload error screenshot (如果失败)
-        if: failure()
+        if: failure() || hashFiles('url.txt') == ''
         uses: actions/upload-artifact@v4
         with:
           name: error-screenshot
