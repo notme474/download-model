@@ -17,37 +17,45 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install cloudscraper beautifulsoup4
+          pip install playwright
+          playwright install chromium
 
-      - name: Download the model pack
+      - name: Download the model pack with browser
         run: |
           python -c "
-          import cloudscraper
-          from bs4 import BeautifulSoup
-          import sys
-          
-          url = 'https://quaternius.itch.io/downtown-city-megakit'
-          scraper = cloudscraper.create_scraper()
-          resp = scraper.get(url)
-          soup = BeautifulSoup(resp.text, 'html.parser')
-          
-          download_link = None
-          for a in soup.find_all('a', href=True):
-              if '/download/' in a['href']:
-                  download_link = a['href']
-                  break
-          
-          if not download_link:
-              print('❌ 找不到下载直链，页面内容前500字如下：')
-              print(resp.text[:500])
-              exit(1)
-          
-          print(f'✅ 找到下载直链: {download_link}')
-          r = scraper.get(download_link, stream=True)
-          with open('Downtown_City_MegaKit.zip', 'wb') as f:
-              for chunk in r.iter_content(chunk_size=8192):
-                  f.write(chunk)
-          print('✅ 下载完成！文件大小:', len(r.content))
+          from playwright.sync_api import sync_playwright
+          import time
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              context = browser.new_context()
+              page = context.new_page()
+              
+              print('正在访问页面...')
+              page.goto('https://quaternius.itch.io/downtown-city-megakit', timeout=60000)
+              
+              # 等待页面渲染，确保下载按钮已加载
+              time.sleep(5) 
+              
+              print('寻找下载按钮...')
+              # 寻找包含 Download 文本的按钮或链接
+              download_btn = page.locator('a:has-text(\"Download\"), button:has-text(\"Download\")').first
+              
+              if download_btn.count() == 0:
+                  print('❌ 找不到下载按钮，打印页面内容：')
+                  print(page.content()[:500])
+                  browser.close()
+                  exit(1)
+              
+              print('找到按钮，准备点击！')
+              # 监听下载事件
+              with page.expect_download() as download_info:
+                  download_btn.click()
+              
+              download = download_info.value
+              download.save_as('Downtown_City_MegaKit.zip')
+              print('✅ 下载成功！')
+              browser.close()
           "
 
       - name: Upload the model pack
