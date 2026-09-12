@@ -20,7 +20,7 @@ jobs:
           pip install playwright
           playwright install chromium
 
-      - name: Fetch Download URL (With Alternate Mode)
+      - name: Fetch Download URL (Strict Filter)
         run: |
           python -c "
           import time
@@ -29,7 +29,8 @@ jobs:
           captured_urls = []
 
           def handle_request(request):
-              if 'itch.zone' in request.url or 'amazonaws' in request.url:
+              # 🎯 核心修改：只抓 .zip 结尾或者包含 /download/ 的请求，过滤掉图片！
+              if request.url.endswith('.zip') or '/download/' in request.url:
                   captured_urls.append(request.url)
                   print(f'🎯 抓取到真实下载地址: {request.url}')
 
@@ -76,12 +77,13 @@ jobs:
                   print('❌ 找不到最终按钮')
 
               print('等待网络请求捕获...')
-              time.sleep(15)
+              time.sleep(20)
 
               if captured_urls:
-                  print('✅ 成功捕获 URL！')
+                  print(f'✅ 成功捕获 {len(captured_urls)} 个下载 URL！')
                   with open('url.txt', 'w') as f:
-                      f.write(captured_urls[-1])
+                      for u in captured_urls:
+                          f.write(u + '\n')
               else:
                   print('❌ 未捕获到下载 URL。')
                   page.screenshot(path='error_screenshot.png')
