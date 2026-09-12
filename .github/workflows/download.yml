@@ -1,0 +1,55 @@
+name: Download Quaternius MegaKit
+on:
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Download the model pack
+        run: |
+          python -c "
+          import requests
+          from bs4 import BeautifulSoup
+
+          url = 'https://quaternius.itch.io/downtown-city-megakit'
+          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+          resp = requests.get(url, headers=headers)
+          soup = BeautifulSoup(resp.text, 'html.parser')
+
+          download_link = None
+          for a in soup.find_all('a', href=True):
+              if '/download/' in a['href']:
+                  download_link = a['href']
+                  break
+
+          if not download_link:
+              print('❌ 找不到下载直链，可能是页面结构变了')
+              exit(1)
+
+          print(f'✅ 找到下载直链: {download_link}')
+          r = requests.get(download_link, stream=True, headers=headers)
+          with open('Downtown_City_MegaKit.zip', 'wb') as f:
+              for chunk in r.iter_content(chunk_size=8192):
+                  f.write(chunk)
+          print('✅ 下载完成！文件大小:', len(r.content))
+          "
+
+      - name: Upload the model pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: Downtown-City-MegaKit
+          path: Downtown_City_MegaKit.zip
