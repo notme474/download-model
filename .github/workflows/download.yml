@@ -20,7 +20,7 @@ jobs:
           pip install playwright
           playwright install chromium
 
-      - name: Download with Playwright (Handling Popups)
+      - name: Download with Playwright
         run: |
           python -c "
           from playwright.sync_api import sync_playwright
@@ -35,7 +35,6 @@ jobs:
               page.goto('https://quaternius.itch.io/downtown-city-megakit', timeout=90000)
               time.sleep(5)
               
-              # 1. 点击主下载按钮
               print('寻找主下载按钮...')
               main_btn = page.locator('a.button.download_btn, a:has-text(\"Download\")').first
               if main_btn.count() == 0:
@@ -44,26 +43,31 @@ jobs:
               main_btn.click()
               time.sleep(5)
               
-              # 2. 处理“No thanks”赞助弹窗
               print('检查是否有赞助弹窗...')
               no_thanks = page.locator('a:has-text(\"No thanks\"), a:has-text(\"直接下载\"), a:has-text(\"Just take me\")')
               if no_thanks.count() > 0:
                   print('✅ 发现弹窗，点击 No thanks...')
                   no_thanks.first.click()
-                  time.sleep(5)
+                  time.sleep(5) # 给它一点时间加载
               else:
-                  print('没有发现弹窗，尝试继续...')
+                  print('没有发现弹窗')
               
-              # 3. 寻找最终的真实下载链接并触发
+              # 关键修复：点击弹窗后，页面可能会重绘。多等一会，并寻找真正的下载按钮
+              print('等待下载页面加载...')
+              page.wait_for_timeout(8000) 
+              
               print('寻找最终文件链接...')
-              final_link = page.locator('a[href*=\".zip\"], a[href*=\"/download/\"]').first
-              if final_link.count() == 0:
-                  print('❌ 找不到最终下载链接')
+              # 改为更宽泛的查找，寻找含有 Download 文本的按钮或链接
+              final_btn = page.locator('a.button.download_btn, button.download_btn, a:has-text(\"Download\"), button:has-text(\"Download\")').last
+              
+              if final_btn.count() == 0:
+                  print('❌ 找不到最终下载按钮，打印页面片段供排查:')
+                  print(page.content()[:1000])
                   exit(1)
                   
-              print('触发下载动作...')
+              print('触发下载动作！')
               with page.expect_download(timeout=120000) as download_info:
-                  final_link.click()
+                  final_btn.click()
               
               download = download_info.value
               download.save_as('Downtown_City_MegaKit.zip')
